@@ -12,7 +12,7 @@ from datetime import datetime
 
 import config
 from src.weather import fetch_historical_weather
-from src.scoring import calculate_aspect_formation_rates
+from src.scoring import calculate_aspect_formation_rates_with_history
 from src.visualization import create_timeseries_map
 
 
@@ -29,8 +29,9 @@ def main():
     # Fetch historical weather data
     print("\n[1/3] Fetching 7-day historical weather data (3-hourly)...")
     historical_data = fetch_historical_weather(
-        days=7,
-        interval_hours=3,
+        past_days=6,
+        forecast_days=2,
+        interval_hours=1,
     )
 
     if not historical_data["locations"]:
@@ -56,19 +57,15 @@ def main():
 
         location_rates = []
         for i, weather in enumerate(weather_series):
-            # Parse hour from timestamp for time-of-day factor
-            try:
-                hour = int(weather["timestamp"].split("T")[1].split(":")[0])
-            except (IndexError, ValueError):
-                hour = 12
+            # Construct lookback window for melt-freeze detection
+            lookback_hours = config.VERGLAS_LOOKBACK_HOURS
+            start_idx = max(0, i - lookback_hours)
+            past_24h = weather_series[start_idx:i]
 
-            rates = calculate_aspect_formation_rates(
-                temperature=weather["temperature"],
-                humidity=weather["humidity"],
-                wind_speed=weather["wind_speed"],
-                wind_direction=weather["wind_direction"],
-                precipitation=weather["precipitation"],
-                hour_of_day=hour,
+            # Calculate rates using melt-freeze detection
+            rates = calculate_aspect_formation_rates_with_history(
+                current_weather=weather,
+                past_24h_weather=past_24h,
             )
 
             # Add weather info to rates for display
@@ -89,10 +86,9 @@ def main():
         latest = loc_data["rates"][-1]
         weather = latest["weather"]
         rime_rates = latest["rime"]
-        verglas_rates = latest["verglas"]
+        verglas_rate = latest["verglas"]
 
         max_rime = max(rime_rates.values())
-        max_verglas = max(verglas_rates.values())
 
         print(f"\n{name} ({loc_data['altitude']}m):")
         print(f"  {weather['temperature']:.1f}°C, {weather['wind_speed']*2.237:.0f} mph wind")
@@ -103,9 +99,8 @@ def main():
         else:
             print(f"  Rime: None")
 
-        if max_verglas > 0:
-            max_aspects = [d for d, r in verglas_rates.items() if r == max_verglas]
-            print(f"  Verglas: {max_verglas:.2f} on {', '.join(max_aspects)}")
+        if verglas_rate > 0:
+            print(f"  Verglas: {verglas_rate:.2f}")
         else:
             print(f"  Verglas: None")
 
@@ -115,9 +110,9 @@ def main():
 
     print(f"\nMap saved to: {output_path}")
     print("\nFeatures:")
-    print("  - Use the slider to view conditions at different times over the past week")
-    print("  - Toggle between 'Rate' (instantaneous) and 'Cumulative' (total over time)")
-    print("  - Click markers for detailed information")
+    print("  - Use the slider to view conditions at different times")
+    print("  - Click markers for detailed weather time series")
+    print("  - Compass shows rime formation rate by aspect")
 
     return 0
 

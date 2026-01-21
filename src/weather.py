@@ -128,7 +128,8 @@ def get_weather_summary(weather_data: dict) -> str:
 
 def fetch_historical_weather(
     locations: Optional[dict] = None,
-    days: int = 7,
+    past_days: int = 7,
+    forecast_days: int = 1,
     interval_hours: int = 3,
     max_retries: int = 3,
     retry_delay: float = 1.0,
@@ -159,8 +160,8 @@ def fetch_historical_weather(
         locations = config.FOCUS_AREAS
 
     # Calculate date range (archive API has ~5 day delay, so use forecast API for recent data)
-    end_date = datetime.now() + timedelta(days=1)
-    start_date = end_date - timedelta(days=days)
+    # end_date = datetime.now() + timedelta(days=days_forward)
+    # start_date = end_date - timedelta(days=days_back)
 
     result = {
         "timestamps": [],
@@ -174,8 +175,8 @@ def fetch_historical_weather(
             name,
             loc["lat"],
             loc["lon"],
-            start_date,
-            end_date,
+            past_days,
+            forecast_days,
             interval_hours,
             max_retries,
             retry_delay,
@@ -196,8 +197,8 @@ def _fetch_location_historical(
     name: str,
     lat: float,
     lon: float,
-    start_date: datetime,
-    end_date: datetime,
+    past_days: int,
+    forecast_days: int,
     interval_hours: int,
     max_retries: int,
     retry_delay: float,
@@ -208,8 +209,8 @@ def _fetch_location_historical(
         "latitude": lat,
         "longitude": lon,
         "hourly": ",".join(HOURLY_PARAMS),
-        "past_days": 7,
-        "forecast_days": 1,
+        "past_days": past_days,
+        "forecast_days": forecast_days,
         "wind_speed_unit": "ms",
         "timezone": "Europe/London",
     }

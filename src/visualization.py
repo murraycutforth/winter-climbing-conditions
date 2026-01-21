@@ -115,13 +115,13 @@ def _add_compass_marker(
     wind_direction = weather.get("wind_direction", 0)
     wind_speed_ms = weather.get("wind_speed", 0)
     wind_speed_mph = wind_speed_ms * 2.237  # Convert m/s to mph
-    altitude = loc_info.get("altitude", 0)
-    icon_svg = _generate_mini_compass_icon(rime_rates, verglas_rates, wind_direction, wind_speed_mph, altitude)
+    temperature = weather.get("temperature", 0)
+    icon_svg = _generate_mini_compass_icon(rime_rates, verglas_rates, wind_direction, wind_speed_mph, temperature)
 
     icon = folium.DivIcon(
         html=icon_svg,
-        icon_size=(80, 105),
-        icon_anchor=(40, 52),
+        icon_size=(80, 95),
+        icon_anchor=(40, 47),
     )
 
     folium.Marker(
@@ -196,9 +196,9 @@ def _generate_mini_compass_icon(
     verglas_rates: dict,
     wind_direction: float,
     wind_speed_mph: float,
-    altitude: int,
+    temperature: float,
 ) -> str:
-    """Generate a dual-compass icon for the map marker with wind direction arrow."""
+    """Generate a dual-compass icon for the map marker with temp and wind."""
 
     def mini_compass(rates: dict, cx: int, cy: int) -> str:
         segments = []
@@ -221,24 +221,33 @@ def _generate_mini_compass_icon(
 
     svg = f"""
     <div style="background: white; border-radius: 5px; padding: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
-        <svg width="72" height="95" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="18" cy="18" r="3" fill="#eee" stroke="#333" stroke-width="0.5"/>
-            {mini_compass(rime_rates, 18, 18)}
-            <text x="18" y="38" text-anchor="middle" font-size="8" font-weight="bold">Rime</text>
-
-            <circle cx="54" cy="18" r="3" fill="#eee" stroke="#333" stroke-width="0.5"/>
-            {mini_compass(verglas_rates, 54, 18)}
-            <text x="54" y="38" text-anchor="middle" font-size="8" font-weight="bold">Verglas</text>
-
-            <!-- Wind direction arrow -->
-            <g transform="translate(36, 58)">
-                <g transform="rotate({arrow_rotation})">
-                    <line x1="0" y1="7" x2="0" y2="-7" stroke="#2563eb" stroke-width="2"/>
-                    <polygon points="0,-9 -3,-4 3,-4" fill="#2563eb"/>
-                </g>
+        <svg width="72" height="85" xmlns="http://www.w3.org/2000/svg">
+            <!-- TOP ROW: Rime and Verglas -->
+            <g>
+                <circle cx="18" cy="18" r="3" fill="#eee" stroke="#333" stroke-width="0.5"/>
+                {mini_compass(rime_rates, 18, 18)}
+                <text x="18" y="38" text-anchor="middle" font-size="8" font-weight="bold">Rime</text>
             </g>
-            <text x="36" y="75" text-anchor="middle" font-size="7" font-weight="bold" fill="#2563eb">{wind_speed_mph:.0f} mph</text>
-            <text x="36" y="88" text-anchor="middle" font-size="7" font-weight="bold" fill="#666">{altitude}m</text>
+            <g>
+                <circle cx="54" cy="18" r="3" fill="#eee" stroke="#333" stroke-width="0.5"/>
+                {mini_compass(verglas_rates, 54, 18)}
+                <text x="54" y="38" text-anchor="middle" font-size="8" font-weight="bold">Verglas</text>
+            </g>
+
+            <!-- BOTTOM ROW: Temperature and Wind -->
+            <g>
+                <text x="18" y="58" text-anchor="middle" font-size="11" font-weight="bold" fill="#e74c3c">{temperature:.0f}°C</text>
+                <text x="18" y="72" text-anchor="middle" font-size="8" font-weight="bold">Temp</text>
+            </g>
+            <g>
+                <!-- Wind Arrow -->
+                <g transform="translate(54, 58) rotate({arrow_rotation})">
+                    <line x1="0" y1="6" x2="0" y2="-6" stroke="#2563eb" stroke-width="2"/>
+                    <polygon points="0,-8 -3,-3 3,-3" fill="#2563eb"/>
+                </g>
+                <!-- Wind Speed -->
+                <text x="54" y="75" text-anchor="middle" font-size="7" font-weight="bold" fill="#2563eb">{wind_speed_mph:.0f} mph</text>
+            </g>
         </svg>
     </div>
     """
@@ -446,7 +455,7 @@ def create_timeseries_map(
     output_path: Optional[str] = None,
 ) -> str:
     """
-    Create an interactive map with time slider and rate/cumulative toggle.
+    Create an interactive map with time slider.
 
     Args:
         timeseries_data: Dict with structure:
@@ -455,7 +464,7 @@ def create_timeseries_map(
                 "locations": {
                     "name": {
                         "altitude": int,
-                        "rates": [list of {rime: {}, verglas: {}, weather: {}}]
+                        "rates": [list of {rime: {}, verglas: float, weather: {}}]
                     }
                 }
             }
@@ -490,24 +499,6 @@ def create_timeseries_map(
             "rates": loc_data["rates"],
         }
 
-    # Calculate cumulative totals
-    for name, loc in js_data["locations"].items():
-        cumulative_rime = {d: 0 for d in COMPASS_ORDER}
-        cumulative_verglas = {d: 0 for d in COMPASS_ORDER}
-        cumulative_rates = []
-
-        for rates in loc["rates"]:
-            for d in COMPASS_ORDER:
-                cumulative_rime[d] += rates["rime"].get(d, 0)
-                cumulative_verglas[d] += rates["verglas"].get(d, 0)
-
-            cumulative_rates.append({
-                "rime": {d: round(cumulative_rime[d], 3) for d in COMPASS_ORDER},
-                "verglas": {d: round(cumulative_verglas[d], 3) for d in COMPASS_ORDER},
-            })
-
-        loc["cumulative"] = cumulative_rates
-
     # Generate the HTML with embedded JavaScript
     html_content = _generate_timeseries_html(js_data)
 
@@ -524,6 +515,7 @@ def _generate_timeseries_html(js_data: dict) -> str:
 
     data_json = json.dumps(js_data)
 
+
     html = f'''<!DOCTYPE html>
 <html>
 <head>
@@ -534,21 +526,16 @@ def _generate_timeseries_html(js_data: dict) -> str:
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         body {{ margin: 0; padding: 0; font-family: Arial, sans-serif; }}
-        #map {{ position: absolute; top: 0; bottom: 80px; width: 100%; }}
+        #map {{ position: absolute; top: 0; bottom: 50px; width: 100%; }}
         #controls {{
             position: absolute;
             bottom: 0;
             width: 100%;
-            height: 80px;
+            height: 50px;
             background: #fff;
             border-top: 2px solid #ccc;
             padding: 10px 20px;
             box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }}
-        #slider-row {{
             display: flex;
             align-items: center;
             gap: 15px;
@@ -562,30 +549,9 @@ def _generate_timeseries_html(js_data: dict) -> str:
             font-weight: bold;
             font-size: 14px;
         }}
-        #toggle-row {{
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }}
-        .toggle-btn {{
-            padding: 6px 16px;
-            border: 2px solid #2563eb;
-            background: white;
-            cursor: pointer;
-            font-size: 13px;
-            border-radius: 4px;
-        }}
-        .toggle-btn.active {{
-            background: #2563eb;
-            color: white;
-        }}
-        #mode-info {{
-            color: #666;
-            font-size: 12px;
-        }}
         .legend {{
             position: absolute;
-            bottom: 100px;
+            bottom: 70px;
             left: 10px;
             background: white;
             padding: 10px;
@@ -605,13 +571,42 @@ def _generate_timeseries_html(js_data: dict) -> str:
             height: 18px;
             display: inline-block;
         }}
-        .compass-popup {{
-            min-width: 340px;
+        .leaflet-popup-content {{
+            min-width: 380px;
+            max-width: 420px;
         }}
-        .compass-container {{
+        .popup-header {{
+            margin: 0 0 5px 0;
+            font-size: 16px;
+        }}
+        .popup-desc {{
+            margin: 0 0 10px 0;
+            color: #666;
+            font-style: italic;
+            font-size: 12px;
+        }}
+        .rates-row {{
             display: flex;
             justify-content: space-around;
+            align-items: flex-start;
             margin: 10px 0;
+            gap: 15px;
+        }}
+        .verglas-box {{
+            text-align: center;
+            padding: 10px;
+        }}
+        .verglas-value {{
+            font-size: 28px;
+            font-weight: bold;
+            padding: 15px 25px;
+            border-radius: 8px;
+            display: inline-block;
+        }}
+        .verglas-label {{
+            font-size: 11px;
+            font-weight: bold;
+            margin-top: 5px;
         }}
         .weather-box {{
             background: #f5f5f5;
@@ -620,22 +615,22 @@ def _generate_timeseries_html(js_data: dict) -> str:
             margin: 10px 0;
             font-size: 12px;
         }}
+        .chart-container {{
+            margin: 10px 0;
+        }}
+        .chart-title {{
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }}
     </style>
 </head>
 <body>
     <div id="map"></div>
     <div id="controls">
-        <div id="slider-row">
-            <span>Time:</span>
-            <input type="range" id="time-slider" min="0" max="{len(js_data['timestamps'])-1}" value="{len(js_data['timestamps'])-1}" />
-            <span id="time-display"></span>
-        </div>
-        <div id="toggle-row">
-            <span>Display:</span>
-            <button class="toggle-btn active" id="btn-rate" onclick="setMode('rate')">Rate</button>
-            <button class="toggle-btn" id="btn-cumulative" onclick="setMode('cumulative')">Cumulative</button>
-            <span id="mode-info">Showing instantaneous formation rate</span>
-        </div>
+        <span>Time:</span>
+        <input type="range" id="time-slider" min="0" max="{len(js_data['timestamps'])-1}" value="{len(js_data['timestamps'])-1}" />
+        <span id="time-display"></span>
     </div>
     <div class="legend">
         <b>Formation Rate</b><br>
@@ -648,7 +643,6 @@ def _generate_timeseries_html(js_data: dict) -> str:
     <script>
         const data = {data_json};
         const compassOrder = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-        let currentMode = 'rate';
         let currentTimeIndex = data.timestamps.length - 1;
         let markers = {{}};
 
@@ -659,33 +653,18 @@ def _generate_timeseries_html(js_data: dict) -> str:
             attribution: '© OpenStreetMap contributors'
         }}).addTo(map);
 
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{{z}}/{{y}}/{{x}}', {{
-            attribution: 'Esri'
-        }});
-
         // Color function
-        function rateToColor(rate, isCumulative) {{
-            if (isCumulative) {{
-                // Scale for cumulative (can be > 1)
-                const scaled = Math.min(rate / 5, 1);  // 5 = high cumulative
-                if (scaled <= 0) return '#e8e8e8';
-                if (scaled < 0.2) return '#a8e6cf';
-                if (scaled < 0.4) return '#dcedc1';
-                if (scaled < 0.6) return '#ffd3a5';
-                if (scaled < 0.8) return '#ffaaa5';
-                return '#ff6b6b';
-            }} else {{
-                if (rate <= 0) return '#e8e8e8';
-                if (rate < 0.2) return '#a8e6cf';
-                if (rate < 0.4) return '#dcedc1';
-                if (rate < 0.6) return '#ffd3a5';
-                if (rate < 0.8) return '#ffaaa5';
-                return '#ff6b6b';
-            }}
+        function rateToColor(rate) {{
+            if (rate <= 0) return '#e8e8e8';
+            if (rate < 0.2) return '#a8e6cf';
+            if (rate < 0.4) return '#dcedc1';
+            if (rate < 0.6) return '#ffd3a5';
+            if (rate < 0.8) return '#ffaaa5';
+            return '#ff6b6b';
         }}
 
-        // Create SVG compass
-        function createCompassSVG(rates, title, isCumulative) {{
+        // Create SVG compass for rime only
+        function createCompassSVG(rates, title) {{
             const size = 120;
             const center = size / 2;
             const outerR = size / 2 - 10;
@@ -696,7 +675,7 @@ def _generate_timeseries_html(js_data: dict) -> str:
 
             compassOrder.forEach((dir, i) => {{
                 const rate = rates[dir] || 0;
-                const color = rateToColor(rate, isCumulative);
+                const color = rateToColor(rate);
                 const startAngle = -90 + i * 45 - 22.5;
                 const endAngle = startAngle + 45;
 
@@ -734,114 +713,184 @@ def _generate_timeseries_html(js_data: dict) -> str:
             return `M ${{x1o}} ${{y1o}} A ${{rOuter}} ${{rOuter}} 0 0 1 ${{x2o}} ${{y2o}} L ${{x1i}} ${{y1i}} A ${{rInner}} ${{rInner}} 0 0 0 ${{x2i}} ${{y2i}} Z`;
         }}
 
-        // Create mini compass for marker icon
-        function createMiniCompassSVG(rimeRates, verglasRates, windDir, windSpeed, altitude, isCumulative) {{
-            function miniCompass(rates, cx, cy) {{
-                let segs = '';
-                const r = 14, inner = 4;
-                compassOrder.forEach((dir, i) => {{
-                    const rate = rates[dir] || 0;
-                    const color = rateToColor(rate, isCumulative);
-                    const start = -90 + i * 45 - 22.5;
-                    const end = start + 45;
-                    const path = createArcPath(cx, cy, inner, r, start, end);
-                    segs += `<path d="${{path}}" fill="${{color}}" stroke="#333" stroke-width="0.5"/>`;
+        // Temperature to color: blue (-5 and below) to red (+5 and above)
+        function tempToColor(temp) {{
+            // Clamp between -5 and 5
+            const t = Math.max(-5, Math.min(5, temp));
+            // Normalize to 0-1 range
+            const normalized = (t + 5) / 10;
+            // Interpolate from blue to red
+            const r = Math.round(normalized * 255);
+            const b = Math.round((1 - normalized) * 255);
+            return `rgb(${{r}}, 50, ${{b}})`;
+        }}
+
+        // Create mini icon for marker
+        function createMiniIcon(name, temperature, windDir, windSpeed) {{
+            const arrowRotation = windDir + 180;
+            const tempColor = tempToColor(temperature);
+
+            return `<div style="background:white;border-radius:5px;padding:6px 8px;box-shadow:0 2px 5px rgba(0,0,0,0.3);text-align:center;">
+                <div style="font-size:11px;font-weight:bold;margin-bottom:4px;white-space:nowrap;">${{name}}</div>
+                <div style="display:flex;align-items:center;justify-content:center;gap:8px;">
+                    <span style="font-size:13px;font-weight:bold;color:${{tempColor}}">${{temperature.toFixed(0)}}°C</span>
+                    <svg width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+                        <g transform="translate(12, 12) rotate(${{arrowRotation}})">
+                            <line x1="0" y1="7" x2="0" y2="-7" stroke="#2563eb" stroke-width="2"/>
+                            <polygon points="0,-9 -4,-4 4,-4" fill="#2563eb"/>
+                        </g>
+                    </svg>
+                    <span style="font-size:10px;font-weight:bold;color:#2563eb">${{Math.round(windSpeed)}}mph</span>
+                </div>
+            </div>`;
+        }}
+        
+        function formatDate(ts) {{
+            const d = new Date(ts);
+            return d.toLocaleDateString('en-GB', {{ month: 'short', day: 'numeric' }});
+        }}
+
+        // Create time series chart SVG
+        function createTimeSeriesChart(locData, currentIdx) {{
+            const width = 360;
+            const height = 80;
+            const padding = {{top: 10, right: 10, bottom: 20, left: 40}};
+            const chartW = width - padding.left - padding.right;
+            const chartH = height - padding.top - padding.bottom;
+
+            const n = locData.rates.length;
+            if (n === 0) return '';
+            
+            const temps = locData.rates.map(r => r.weather.temperature);
+            const winds = locData.rates.map(r => r.weather.wind_speed * 2.237);
+            const precips = locData.rates.map(r => r.weather.precipitation);
+            
+            const startDate = formatDate(data.timestamps[0]);
+            const endDate = formatDate(data.timestamps[n - 1]);
+
+            function makePath(values, minV, maxV, color) {{
+                const range = maxV - minV || 1;
+                let path = '';
+                values.forEach((v, i) => {{
+                    const x = padding.left + (i / (n - 1)) * chartW;
+                    const y = padding.top + chartH - ((v - minV) / range) * chartH;
+                    path += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
                 }});
-                return segs;
+                return `<path d="${{path}}" fill="none" stroke="${{color}}" stroke-width="1.5"/>`;
             }}
 
-            return `<div style="background:white;border-radius:5px;padding:4px;box-shadow:0 2px 5px rgba(0,0,0,0.3);">
-                <svg width="72" height="95" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="18" cy="18" r="3" fill="#eee" stroke="#333" stroke-width="0.5"/>
-                    ${{miniCompass(rimeRates, 18, 18)}}
-                    <text x="18" y="38" text-anchor="middle" font-size="8" font-weight="bold">Rime</text>
-                    <circle cx="54" cy="18" r="3" fill="#eee" stroke="#333" stroke-width="0.5"/>
-                    ${{miniCompass(verglasRates, 54, 18)}}
-                    <text x="54" y="38" text-anchor="middle" font-size="8" font-weight="bold">Verglas</text>
-                    <g transform="translate(36, 58)">
-                        <g transform="rotate(${{windDir + 180}})">
-                            <line x1="0" y1="7" x2="0" y2="-7" stroke="#2563eb" stroke-width="2"/>
-                            <polygon points="0,-9 -3,-4 3,-4" fill="#2563eb"/>
-                        </g>
-                    </g>
-                    <text x="36" y="75" text-anchor="middle" font-size="7" font-weight="bold" fill="#2563eb">${{Math.round(windSpeed)}} mph</text>
-                    <text x="36" y="88" text-anchor="middle" font-size="7" font-weight="bold" fill="#666">${{altitude}}m</text>
-                </svg>
-            </div>`;
+            function makeCurrentLine() {{
+                const x = padding.left + (currentIdx / (n - 1)) * chartW;
+                return `<line x1="${{x}}" y1="${{padding.top}}" x2="${{x}}" y2="${{padding.top + chartH}}" stroke="#e74c3c" stroke-width="2" stroke-dasharray="3,2"/>`;
+            }}
+            
+            function makeChart(title, values, minV, maxV, color, unit) {{
+                 const zeroLineY = padding.top + chartH - ((0 - minV) / (maxV - minV || 1)) * chartH;
+                 const showZeroLine = minV < 0 && maxV > 0;
+
+                 return `<div class="chart-title">${{title}}</div><svg width="${{width}}" height="${{height}}">
+                    <rect x="${{padding.left}}" y="${{padding.top}}" width="${{chartW}}" height="${{chartH}}" fill="#f9f9f9" stroke="#ccc"/>
+                    ${{showZeroLine ? `<line x1="${{padding.left}}" y1="${{zeroLineY}}" x2="${{padding.left+chartW}}" y2="${{zeroLineY}}" stroke="#bbb" stroke-dasharray="2,2"/>` : ''}}
+                    ${{makePath(values, minV, maxV, color)}}
+                    ${{makeCurrentLine()}}
+                    <text x="${{padding.left-4}}" y="${{padding.top+4}}" dominant-baseline="hanging" text-anchor="end" font-size="9" fill="#333">${{maxV.toFixed(0)}}${{unit}}</text>
+                    <text x="${{padding.left-4}}" y="${{padding.top+chartH}}" dominant-baseline="alphabetic" text-anchor="end" font-size="9" fill="#333">${{minV.toFixed(0)}}${{unit}}</text>
+                    <text x="${{padding.left}}" y="${{height - 3}}" text-anchor="start" font-size="9" fill="#666">${{startDate}}</text>
+                    <text x="${{padding.left + chartW}}" y="${{height - 3}}" text-anchor="end" font-size="9" fill="#666">${{endDate}}</text>
+                 </svg>`;
+            }}
+
+            const tempMin = Math.floor(Math.min(...temps)) - 1;
+            const tempMax = Math.ceil(Math.max(...temps)) + 1;
+            const windMax = Math.ceil(Math.max(...winds, 10) / 5) * 5;
+            const precipMax = Math.max(...precips, 1);
+
+            const tempChart = makeChart('Temperature', temps, tempMin, tempMax, '#e74c3c', '°C');
+            const windChart = makeChart('Wind Speed', winds, 0, windMax, '#2563eb', ' mph');
+            const precipChart = `<div class="chart-title">Precipitation</div><svg width="${{width}}" height="${{height}}">
+                <rect x="${{padding.left}}" y="${{padding.top}}" width="${{chartW}}" height="${{chartH}}" fill="#f9f9f9" stroke="#ccc"/>
+                ${{makePath(precips, 0, precipMax, '#27ae60')}}
+                ${{makeCurrentLine()}}
+                <text x="${{padding.left-4}}" y="${{padding.top+4}}" dominant-baseline="hanging" text-anchor="end" font-size="9" fill="#333">${{precipMax.toFixed(1)}} mm</text>
+                <text x="${{padding.left-4}}" y="${{padding.top+chartH}}" dominant-baseline="alphabetic" text-anchor="end" font-size="9" fill="#333">0.0 mm</text>
+                <text x="${{padding.left}}" y="${{height - 3}}" text-anchor="start" font-size="9" fill="#666">${{startDate}}</text>
+                <text x="${{padding.left + chartW}}" y="${{height - 3}}" text-anchor="end" font-size="9" fill="#666">${{endDate}}</text>
+            </svg>`;
+            
+            return tempChart + windChart + precipChart;
         }}
 
         // Create popup content
-        function createPopupContent(name, locData, timeIndex, isCumulative) {{
-            const ratesData = isCumulative ? locData.cumulative[timeIndex] : locData.rates[timeIndex];
-            const weather = locData.rates[timeIndex].weather;
+        function createPopupContent(name, locData, timeIndex) {{
+            const ratesData = locData.rates[timeIndex];
+            const weather = ratesData.weather;
             const rimeRates = ratesData.rime;
-            const verglasRates = ratesData.verglas;
+            const verglasRate = ratesData.verglas;
 
-            const rimeSVG = createCompassSVG(rimeRates, 'Rime', isCumulative);
-            const verglasSVG = createCompassSVG(verglasRates, 'Verglas', isCumulative);
+            const rimeSVG = createCompassSVG(rimeRates, 'Rime Rate');
+            const verglasColor = rateToColor(verglasRate);
 
-            let ratesTable = '<table style="width:100%;border-collapse:collapse;font-size:11px;"><tr style="background:#ddd;"><th>Aspect</th><th>Rime</th><th>Verglas</th></tr>';
-            compassOrder.forEach(dir => {{
-                const r = rimeRates[dir] || 0;
-                const v = verglasRates[dir] || 0;
-                const rc = rateToColor(r, isCumulative);
-                const vc = rateToColor(v, isCumulative);
-                ratesTable += `<tr><td style="font-weight:bold">${{dir}}</td><td style="background:${{rc}};text-align:center">${{r.toFixed(2)}}</td><td style="background:${{vc}};text-align:center">${{v.toFixed(2)}}</td></tr>`;
-            }});
-            ratesTable += '</table>';
+            const charts = createTimeSeriesChart(locData, timeIndex);
 
-            return `<div class="compass-popup">
-                <h3 style="margin:0 0 5px 0">${{name}}</h3>
-                <p style="margin:0 0 10px 0;color:#666;font-style:italic">${{locData.description}}</p>
-                <div class="compass-container">${{rimeSVG}}${{verglasSVG}}</div>
+            return `<div>
+                <h3 class="popup-header">${{name}} (${{locData.altitude}}m)</h3>
+                <p class="popup-desc">${{locData.description}}</p>
+
+                <div class="rates-row">
+                    <div>${{rimeSVG}}</div>
+                    <div class="verglas-box">
+                        <div class="verglas-value" style="background:${{verglasColor}}">${{verglasRate.toFixed(2)}}</div>
+                        <div class="verglas-label">Verglas Rate</div>
+                    </div>
+                </div>
+
                 <div class="weather-box">
-                    <b>Conditions at ${{data.timestamps[timeIndex]}}:</b><br>
+                    <b>Conditions at ${{formatTimestamp(data.timestamps[timeIndex])}}:</b><br>
                     Temp: <b>${{weather.temperature.toFixed(1)}}°C</b> |
-                    Humidity: <b>${{weather.humidity.toFixed(0)}}%</b><br>
-                    Wind: <b>${{(weather.wind_speed * 2.237).toFixed(0)}} mph</b> from <b>${{weather.wind_direction.toFixed(0)}}°</b><br>
+                    Humidity: <b>${{weather.humidity.toFixed(0)}}%</b> |
+                    Wind: <b>${{(weather.wind_speed * 2.237).toFixed(0)}} mph</b> from <b>${{weather.wind_direction.toFixed(0)}}°</b> |
                     Precip: <b>${{weather.precipitation.toFixed(1)}} mm</b>
                 </div>
-                ${{ratesTable}}
+
+                <div class="chart-container">
+                    <div class="chart-title">Weather History (red line = current time)</div>
+                    ${{charts}}
+                </div>
             </div>`;
         }}
 
         // Update all markers
         function updateMarkers() {{
-            const isCumulative = currentMode === 'cumulative';
-
             Object.keys(data.locations).forEach(name => {{
                 const loc = data.locations[name];
-                const ratesData = isCumulative ? loc.cumulative[currentTimeIndex] : loc.rates[currentTimeIndex];
-                const weather = loc.rates[currentTimeIndex].weather;
+                const ratesData = loc.rates[currentTimeIndex];
+                const weather = ratesData.weather;
 
-                const iconHtml = createMiniCompassSVG(
-                    ratesData.rime,
-                    ratesData.verglas,
+                const iconHtml = createMiniIcon(
+                    name,
+                    weather.temperature,
                     weather.wind_direction,
-                    weather.wind_speed * 2.237,
-                    loc.altitude,
-                    isCumulative
+                    weather.wind_speed * 2.237
                 );
 
                 const icon = L.divIcon({{
                     html: iconHtml,
-                    iconSize: [80, 105],
-                    iconAnchor: [40, 52],
+                    iconSize: [120, 50],
+                    iconAnchor: [60, 25],
                     className: ''
                 }});
 
                 if (markers[name]) {{
                     markers[name].setIcon(icon);
-                    markers[name].setPopupContent(createPopupContent(name, loc, currentTimeIndex, isCumulative));
+                    markers[name].setPopupContent(createPopupContent(name, loc, currentTimeIndex));
                 }} else {{
                     markers[name] = L.marker([loc.lat, loc.lon], {{ icon: icon }})
-                        .bindPopup(createPopupContent(name, loc, currentTimeIndex, isCumulative), {{ maxWidth: 400 }})
+                        .bindPopup(createPopupContent(name, loc, currentTimeIndex), {{ maxWidth: 450 }})
                         .bindTooltip(name + ' - Click for details')
                         .addTo(map);
                 }}
             }});
 
-            // Update time display
             document.getElementById('time-display').textContent = formatTimestamp(data.timestamps[currentTimeIndex]);
         }}
 
@@ -849,17 +898,6 @@ def _generate_timeseries_html(js_data: dict) -> str:
             const d = new Date(ts);
             return d.toLocaleDateString('en-GB', {{ weekday: 'short', day: 'numeric', month: 'short' }}) +
                    ' ' + d.toLocaleTimeString('en-GB', {{ hour: '2-digit', minute: '2-digit' }});
-        }}
-
-        // Mode toggle
-        function setMode(mode) {{
-            currentMode = mode;
-            document.getElementById('btn-rate').classList.toggle('active', mode === 'rate');
-            document.getElementById('btn-cumulative').classList.toggle('active', mode === 'cumulative');
-            document.getElementById('mode-info').textContent = mode === 'rate'
-                ? 'Showing instantaneous formation rate'
-                : 'Showing cumulative formation since ' + formatTimestamp(data.timestamps[0]);
-            updateMarkers();
         }}
 
         // Slider event
@@ -875,3 +913,4 @@ def _generate_timeseries_html(js_data: dict) -> str:
 </html>'''
 
     return html
+

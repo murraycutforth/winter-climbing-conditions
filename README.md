@@ -1,33 +1,28 @@
-# Rime and Verglas Predictor
+# Rime and Verglas Formation Predictor
 
-A Python application to predict rime ice and verglas formation risk on Scottish cliffs using weather data, terrain analysis, and meteorological rules.
+A Python application to predict rime ice and verglas formation rates on Scottish cliffs using weather data and meteorological rules. Generates interactive maps with compass graphics showing aspect-specific formation rates and historical time series.
 
 ## Features
 
-- Fetches real-time weather data from Open-Meteo API (no API key required)
-- Downloads and processes SRTM digital elevation model data
-- Calculates terrain aspect and slope for risk assessment
-- Scores rime and verglas risk using meteorological rules
-- Generates interactive Folium maps with heatmaps and markers
+- Fetches historical and forecast weather data from Open-Meteo API (no API key required)
+- Calculates rime formation rates for all 8 compass aspects (windward faces accumulate more)
+- Calculates verglas formation rates based on temperature and precipitation
+- Generates interactive HTML map with:
+  - Time slider to view conditions over past days and forecast
+  - Compass graphics showing rime rates by aspect
+  - Wind direction and speed indicators
+  - Temperature and altitude display
+  - Click popups with weather time series charts
 
 ## Focus Areas
 
-- **Cairngorms** - Cairngorm plateau and Northern Corries
-- **Ben Nevis** - North face and CMD arête
-- **Glencoe** - Buachaille Etive Mor and Aonach Eagach
-- **Creag Meagaidh** - Coire Ardair cliffs
+- **Carn Etchachan** - Cairngorms plateau (1120m)
+- **Ben Nevis** - North face and CMD arrete (1150m)
+- **Creag Meagaidh** - Coire Ardair cliffs (850m)
+- **Lochnagar** - Cairngorms (1000m)
+- **Beinn Eighe** - Torridon (850m)
 
 ## Installation
-
-### Prerequisites
-
-For full terrain analysis, install GDAL:
-
-```bash
-brew install gdal
-```
-
-### Python Dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -35,64 +30,48 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Full Analysis (with terrain data)
-
 ```bash
 python main.py
 ```
 
-On first run, the application will download SRTM elevation data for Scotland (~56-58°N). This requires an internet connection and may take a few minutes.
-
-### Simplified Analysis (weather only)
-
-```bash
-python main.py --simple
-```
-
-This mode skips terrain analysis and provides risk assessment based on weather data alone.
+Options:
+- `--output PATH` - Custom output path for the HTML map file
 
 ### Output
 
 The application generates:
 
-1. Console output with weather conditions and risk scores
-2. An interactive HTML map at `output/risk_map.html`
+1. Console output with current weather conditions and formation rates
+2. An interactive HTML map at `output/formation_map.html`
 
 Open the HTML file in a web browser to view:
-- Risk heatmaps (toggle between rime and verglas layers)
-- Location markers with detailed conditions
-- Topographic base map option
+- Time slider to browse historical and forecast conditions
+- Compass graphics at each location showing aspect-specific rime rates
+- Verglas rate indicator
+- Click any marker to see temperature, wind, and precipitation time series
 
-## Risk Scoring
+## Formation Rate Scoring
 
-### Rime Ice (0-100)
+### Rime Ice (0.0-1.0)
 
-Rime forms when supercooled water droplets freeze on contact with cold surfaces.
+Rime forms when supercooled water droplets freeze on contact with cold surfaces. Formation rate depends on:
 
-Factors:
-- **Temperature** (30 pts): Optimal -5°C to -10°C
-- **Humidity** (25 pts): >85% ideal
-- **Wind** (20 pts): Higher wind = more rime deposition
-- **Elevation** (15 pts): Higher = more prone
-- **Aspect** (10 pts): Windward faces score higher
+- **Temperature**: Optimal -5C to -10C, viable from -2C to -15C
+- **Humidity**: Requires >70%, higher is better
+- **Wind Speed**: More wind increases deposition rate (0-15 m/s scale)
+- **Aspect**: Windward faces accumulate fastest, leeward faces still get some (10%)
 
-### Verglas (0-100)
+All factors multiply together - all must be present for significant formation.
 
-Verglas forms when rain freezes on surfaces at or below 0°C.
+### Verglas (0.0-1.0)
 
-Factors:
-- **Temperature** (35 pts): Peak around 0°C ±2°C
-- **Precipitation** (30 pts): Recent rain/snow
-- **Humidity** (15 pts): Maintains wet surfaces
-- **Aspect** (10 pts): North-facing retains ice
-- **Time** (10 pts): Evening/night cooling
+Verglas forms when rain freezes on surfaces at or below 0C. Formation rate depends on:
 
-### Risk Levels
+- **Temperature**: Peak around 0C, viable -4C to +4C
+- **Moisture**: Requires recent precipitation OR humidity >85%
+- **Time of Day**: Evening/night cooling promotes freezing, midday sun reduces it
 
-- **Extreme** (75-100): Very hazardous conditions
-- **High** (50-75): Significant ice likely
-- **Moderate** (25-50): Some ice formation possible
-- **Low** (0-25): Minimal risk
+Verglas is aspect-independent - it forms equally on all faces.
 
 ## Project Structure
 
@@ -101,22 +80,19 @@ rime-predictor/
 ├── src/
 │   ├── __init__.py       # Package exports
 │   ├── weather.py        # Open-Meteo API integration
-│   ├── terrain.py        # DEM processing and analysis
-│   ├── scoring.py        # Risk calculation algorithms
-│   └── visualization.py  # Folium map generation
+│   ├── scoring.py        # Formation rate algorithms
+│   └── visualization.py  # Interactive map generation
 ├── main.py               # CLI entry point
 ├── config.py             # Configuration constants
 ├── requirements.txt      # Python dependencies
-├── README.md             # This file
-└── CLAUDE.md             # AI assistant context
+└── README.md             # This file
 ```
 
 ## Limitations
 
-- Weather data is point-based; interpolation between stations is simplified
-- SRTM data is 90m resolution; micro-terrain features not captured
-- Risk models are heuristic approximations, not validated predictions
-- Real-time conditions may vary significantly from forecasts
+- Weather data from Open-Meteo forecast API with past_days parameter (not true reanalysis)
+- Formation models are heuristic approximations based on meteorological principles
+- Real-time conditions at specific cliff faces may vary from summit weather data
 
 ## License
 

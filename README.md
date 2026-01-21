@@ -1,6 +1,9 @@
-# Rime and Verglas Formation Predictor
+# Winter climbing conditions dashboard
 
-A Python application to predict rime ice and verglas formation rates on Scottish cliffs using weather data and meteorological rules. Generates interactive maps with compass graphics showing aspect-specific formation rates and historical time series.
+A Python application to display recent historical winter conditions, and predict rime ice and verglas formation rates on Scottish cliffs using weather data and meteorological rules. Generates interactive maps with compass graphics showing aspect-specific formation rates and historical time series.
+
+<img width="903" height="863" alt="Screenshot 2026-01-21 at 20 50 42" src="https://github.com/user-attachments/assets/9bf6a64b-539d-4489-9d0c-81a778a04ab5" />
+
 
 ## Features
 

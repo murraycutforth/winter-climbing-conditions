@@ -1,0 +1,16 @@
+# HTTP requests
+requests>=2.28.0
+
+# Data processing
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Terrain analysis
+rasterio>=1.3.0
+scipy>=1.10.0
+
+# DEM data download
+elevation>=1.1.3
+
+# Interactive maps
+folium>=0.14.0

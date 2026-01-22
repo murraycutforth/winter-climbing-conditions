@@ -34,6 +34,7 @@ jobs:
 
       - name: Generate conditions map
         run: |
+          mkdir -p output
           python main.py --output output/index.html
 
       - name: Create docs directory for GitHub Pages

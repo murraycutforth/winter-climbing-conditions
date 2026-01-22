@@ -1,0 +1,77 @@
+name: Update Climbing Conditions Map
+
+on:
+  schedule:
+    # Run every 3 hours
+    - cron: '0 */3 * * *'
+  workflow_dispatch:  # Allow manual triggering
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  update-map:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Generate conditions map
+        run: |
+          python main.py --output output/index.html
+
+      - name: Create docs directory for GitHub Pages
+        run: |
+          mkdir -p docs
+          cp output/index.html docs/
+
+      - name: Commit updated map
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add docs/index.html
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update climbing conditions map - $(date -u +'%Y-%m-%d %H:%M UTC')"
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+
+  deploy:
+    needs: update-map
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

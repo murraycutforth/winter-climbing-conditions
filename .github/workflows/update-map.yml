@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for proper git operations
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -50,10 +52,13 @@ jobs:
           git diff --quiet && git diff --staged --quiet || git commit -m "Update climbing conditions map - $(date -u +'%Y-%m-%d %H:%M UTC')"
 
       - name: Push changes
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
+        run: |
+          if git diff-index --quiet HEAD --; then
+            echo "No changes to push"
+          else
+            git pull --rebase origin main
+            git push origin main
+          fi
 
   deploy:
     needs: update-map
@@ -63,7 +68,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: main
+          fetch-depth: 0
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

@@ -5,9 +5,6 @@ on:
     # Run every 3 hours
     - cron: '0 */3 * * *'
   workflow_dispatch:  # Allow manual triggering
-  push:
-    branches:
-      - main
 
 permissions:
   contents: write
@@ -15,14 +12,12 @@ permissions:
   id-token: write
 
 jobs:
-  update-map:
+  update-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for proper git operations
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,42 +29,23 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Generate conditions map
-        run: |
-          mkdir -p output
-          python main.py --output output/index.html
-
-      - name: Create docs directory for GitHub Pages
+      - name: Generate fresh conditions map
         run: |
           mkdir -p docs
-          cp output/index.html docs/
+          python main.py --output docs/index.html
+          echo "Generated map at $(date -u +'%Y-%m-%d %H:%M UTC')"
 
-      - name: Commit updated map
+      - name: Commit and push updated map
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add docs/index.html
-          git diff --quiet && git diff --staged --quiet || git commit -m "Update climbing conditions map - $(date -u +'%Y-%m-%d %H:%M UTC')"
-
-      - name: Push changes
-        run: |
-          if git diff-index --quiet HEAD --; then
-            echo "No changes to push"
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
           else
-            git pull --rebase origin main
-            git push origin main
+            git commit -m "Update climbing conditions map - $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
           fi
-
-  deploy:
-    needs: update-map
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -80,5 +56,4 @@ jobs:
           path: 'docs'
 
       - name: Deploy to GitHub Pages
-        id: deployment
         uses: actions/deploy-pages@v4
